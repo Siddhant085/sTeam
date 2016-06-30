@@ -23,6 +23,8 @@
 constant cvs_version="$Id: debug.pike.in,v 1.1 2008/03/31 13:39:57 exodusd Exp $";
 
 inherit "applauncher.pike";
+#include <classes.h>
+#define OBJ(o) _Server->get_module("filepath:tree")->path_to_object(o)
 
 Stdio.Readline readln;
 mapping options;
@@ -602,6 +604,7 @@ mapping assign(object conn, object _Server, object users)
     "me"          : users->lookup(options->user),
     "edit"        : applaunch,
     "create"      : create_object,
+    "look"        : look,
 
     // from database.h :
     "_SECURITY" : _Server->get_module("security"),
@@ -631,6 +634,116 @@ mapping assign(object conn, object _Server, object users)
     "_BUILDER" : _Server->get_module("users")->lookup("builder"),
     "_CODER" : _Server->get_module("users")->lookup("coder"),
     ]);
+}
+
+int look(string|object str)
+{
+
+  list("files",str);
+  write("---------------\n");
+  list("containers",str);
+  write("---------------\n");
+  list("gates",str);
+  write("---------------\n");
+  list("rooms",str);
+  write("---------------\n");
+  return 0;
+}
+int list(string what,string|object path)
+{
+  if(what==""||what==0)
+  {
+    write("Wrong usage\n");
+    return 0;
+  }
+  int flag=0;
+  string toappend="";
+  array(string) display = get_list(what,path);
+  string a="";
+  if(sizeof(display)==0)
+    toappend = "There are no "+what+" in this room\n";
+  else
+    toappend = "Here is a list of all "+what+"\n";
+  foreach(display,string str)
+  {
+    a=a+(str+"\n");
+    if(str=="Invalid command")
+    {
+      flag=1;
+      write(str+"\n");
+    }
+  }
+  if(flag==0){
+    mapping mp = Process.run("tput cols");
+    int screenwidth = (int)mp["stdout"];
+    write(toappend + "\n");
+    write("%-$*s\n", screenwidth,a);
+    write("\n");
+  }  
+  return 0;
+}
+
+array(string) get_list(string what,string|object|void lpath)
+{
+  array(string) whatlist = ({});
+  object pathobj;
+      if(!lpath)
+       write("Invalid use. please provide the path\nlook(\"<path>\")\n");
+      else if(stringp(lpath))
+       pathobj = OBJ(lpath);
+      else if(objectp(lpath))
+       pathobj = lpath;
+  switch (what)  
+  {
+    case "containers":
+    {
+      mixed all = pathobj->get_inventory_by_class(CLASS_CONTAINER);
+      foreach(all, object obj)
+      {
+        string fact_name = _Server->get_factory(obj)->query_attribute("OBJ_NAME");
+        string obj_name = obj->query_attribute("OBJ_NAME");
+        whatlist = Array.push(whatlist,obj_name);
+      }
+    }
+    break;
+    case "files":
+    {
+      mixed all = pathobj->get_inventory_by_class(CLASS_DOCUMENT|CLASS_DOCLPC|CLASS_DOCEXTERN|CLASS_DOCHTML|CLASS_DOCXML|CLASS_DOCXSL);
+      foreach(all, object obj)
+      {
+        string fact_name = _Server->get_factory(obj)->query_attribute("OBJ_NAME");
+        string obj_name = obj->query_attribute("OBJ_NAME");
+        whatlist = Array.push(whatlist,obj_name);
+      }
+    }
+    break;
+    case "exits":
+    case "gates":
+    case "rooms":
+    {
+      mixed all = pathobj->get_inventory_by_class(CLASS_ROOM|CLASS_EXIT);
+      foreach(all, object obj)
+      {
+        string fact_name = _Server->get_factory(obj)->query_attribute("OBJ_NAME");
+        string obj_name = obj->query_attribute("OBJ_NAME");
+        whatlist = Array.push(whatlist,obj_name);
+      }
+    }
+    break;
+    case "groups":
+    {
+      array(object) groups = _Server->get_module("groups")->get_groups();
+      foreach(groups,object group)
+      {
+        string obj_name = group->get_name();
+        whatlist = Array.push(whatlist,obj_name);
+      }
+    }
+    break;
+    default:
+      whatlist = ({"Invalid command"});
+  }
+  return whatlist;
 }
 
 // create new sTeam objects
